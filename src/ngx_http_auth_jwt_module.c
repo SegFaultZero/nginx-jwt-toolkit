@@ -46,6 +46,7 @@ typedef struct {
   time_t leeway;
   ngx_int_t phase;
   ngx_flag_t enabled;
+  ngx_flag_t required;
   ngx_str_t realm;
   struct {
     json_t *subs;
@@ -158,7 +159,7 @@ static ngx_http_variable_t ngx_http_auth_jwt_vars[] = {
 static ngx_command_t ngx_http_auth_jwt_commands[] = {
   { ngx_string("auth_jwt"),
     NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LMT_CONF
-    |NGX_CONF_TAKE12,
+    |NGX_CONF_TAKE123,
     ngx_http_auth_jwt_conf_set_token_variable,
     NGX_HTTP_LOC_CONF_OFFSET,
     0,
@@ -691,29 +692,67 @@ ngx_http_auth_jwt_conf_set_token_variable(ngx_conf_t *cf,
   lcf->realm.data = value[1].data;
   lcf->realm.len = value[1].len;
 
-  if (cf->args->nelts > 2) {
-    /* check argument starts with "token=" */
-    const char *starts_with = "token=";
-    const size_t starts_with_len = sizeof("token=") - 1;
-    if (value[2].len <= starts_with_len
-        || ngx_strncmp(value[2].data, starts_with, starts_with_len) != 0) {
-      return "no token specified";
+  ngx_flag_t required_updated = 0;
+  ngx_flag_t token_updated = 0;
+
+  for (size_t i = 2; i < cf->args->nelts; i++) {
+    /* check argument starts with "token=" or "required=" */
+    const char *starts_with_token = "token=";
+    const char *starts_with_required = "required=";
+    const size_t starts_with_token_len = sizeof("token=") - 1;
+    const size_t starts_with_required_len = sizeof("required=") - 1;
+    if (value[i].len <= starts_with_token_len) {
+      return "token or required not specified";
+    }
+    
+    if(ngx_strncmp(value[i].data, starts_with_token, starts_with_token_len) == 0) {
+      if(token_updated) {
+        return "token provided multiple times";
+      }
+
+      value[i].data = value[i].data + starts_with_token_len;
+      value[i].len = value[i].len - starts_with_token_len;
+      token_updated = 1;
+    }
+    else if(ngx_strncmp(value[i].data, starts_with_required, starts_with_required_len) == 0) {
+      if(required_updated) {
+        return "required provided multiple times";
+      }
+
+      value[i].data = value[i].data + starts_with_required_len;
+      value[i].len = value[i].len - starts_with_required_len;
+
+      if(value[i].len == 4 && ngx_strncmp(value[i].data, "true", 4) == 0) {
+        lcf->required = 1;
+      }
+      else if(value[i].len == 5 && ngx_strncmp(value[i].data, "false", 5) == 0) {
+        lcf->required = 0;
+      }
+      else {
+        return "required must be true or false";
+      }
+      required_updated = 1;
+      continue;
+    }
+    else {
+      return "token or required not specified";
     }
 
-    value[2].data = value[2].data + starts_with_len;
-    value[2].len = value[2].len - starts_with_len;
-
-    if (value[2].data[0] != '$') {
+    if (value[i].data[0] != '$') {
       return "token is not a variable specified";
     }
 
-    value[2].data++;
-    value[2].len--;
+    value[i].data++;
+    value[i].len--;
 
-    lcf->token_variable = ngx_http_get_variable_index(cf, &value[2]);
+    lcf->token_variable = ngx_http_get_variable_index(cf, &value[i]);
     if (lcf->token_variable == NGX_ERROR) {
       return "no token variables";
     }
+  }
+
+  if(! required_updated) {
+    lcf->required = 1;
   }
 
   return NGX_CONF_OK;
@@ -2124,8 +2163,8 @@ ngx_http_auth_jwt_handler(ngx_http_request_t *r, ngx_int_t phase)
       return NGX_AGAIN;
     }
 
-    if (ngx_http_auth_jwt_validate(r, cf, ctx) == NGX_ERROR) {
-      return ngx_http_auth_jwt_http_error();
+    if (ctx->jwt == NULL || ngx_http_auth_jwt_validate(r, cf, ctx) == NGX_ERROR) {
+      return cf->required ? ngx_http_auth_jwt_http_error() : NGX_OK;
     }
 
     return ngx_http_auth_jwt_http_ok();
@@ -2154,6 +2193,9 @@ ngx_http_auth_jwt_handler(ngx_http_request_t *r, ngx_int_t phase)
     /* token from variable */
     variable = ngx_http_get_indexed_variable(r, cf->token_variable);
     if (variable->not_found) {
+      if(! cf->required) {
+        return NGX_OK;
+      }
       ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                     "auth_jwt: token variable specified was not provided");
       return ngx_http_auth_jwt_http_error();
@@ -2174,7 +2216,7 @@ ngx_http_auth_jwt_handler(ngx_http_request_t *r, ngx_int_t phase)
   if (var.len == 0) {
     ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
                   "auth_jwt: token was not provided");
-    return ngx_http_auth_jwt_http_error_without_token();
+    return cf->required ? ngx_http_auth_jwt_http_error_without_token() : NGX_OK;
   }
 
   ctx->token = ngx_http_auth_jwt_strdup(r->pool, var.data, var.len);
@@ -2189,7 +2231,7 @@ ngx_http_auth_jwt_handler(ngx_http_request_t *r, ngx_int_t phase)
       || ctx->jwt == NULL) {
     ngx_log_error(NGX_LOG_INFO, r->connection->log, 0,
                   "auth_jwt: failed to parse jwt token");
-    return ngx_http_auth_jwt_http_error();
+    return cf->required ? ngx_http_auth_jwt_http_error() : NGX_OK;
   }
 
   /* load keys */
@@ -2199,7 +2241,7 @@ ngx_http_auth_jwt_handler(ngx_http_request_t *r, ngx_int_t phase)
 
   /* validate */
   if (ngx_http_auth_jwt_validate(r, cf, ctx) == NGX_ERROR) {
-    return ngx_http_auth_jwt_http_error();
+    return cf->required ? ngx_http_auth_jwt_http_error() : NGX_OK;
   }
 
   return ngx_http_auth_jwt_http_ok();

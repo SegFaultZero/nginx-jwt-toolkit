@@ -94,7 +94,7 @@ location / {
 
 <a name="auth_jwt"></a>
 ```
-Syntax: auth_jwt string [token=$variable] | off;
+Syntax: auth_jwt string [token=$variable] [required=true] | off;
 Default: auth_jwt off;
 Context: server
 Context: http, server, location, limit_except
