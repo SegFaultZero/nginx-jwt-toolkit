@@ -36,6 +36,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           provenance: false
           push: true
-          tags: ghcr.io/${{ github.repository }}/nginx:${{ env.TAG }}
+          tags: ghcr.io/${{ env.repo_name }}/nginx:${{ env.TAG }}
         env:
           TAG: ${{ github.ref_name == 'main' && 'latest' || github.ref_name }}
