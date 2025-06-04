@@ -1,4 +1,4 @@
-nginx-auth-jwt
+nginx-jwt-toolkit
 ==============
 
 [JSON Web Token]: https://datatracker.ietf.org/doc/html/rfc7519
@@ -7,16 +7,11 @@ nginx-auth-jwt
 [JOSE header]: https://datatracker.ietf.org/doc/html/rfc7515#section-4
 [JWT claim]: https://datatracker.ietf.org/doc/html/rfc7519#section-4
 
-This nginx module implements client authorization by validating the provided
-[JSON Web Token][] (JWT) using the specified keys.
+This nginx module implements [JSON Web Token][] (JWT) validation, authorisation and value extraction.
 
-The module supports [JSON Web Signature][] (JWS).
+The module supports [JSON Web Signature][] (JWS) and [OpenID Connect](http://openid.net/specs/openid-connect-core-1_0.html) authentication.
 
-The module can be used for
-[OpenID Connect](http://openid.net/specs/openid-connect-core-1_0.html)
-authentication.
-
-> This module is heavily inspired by the nginx original
+> This module is forked from [nginx-auth-jwt](https://github.com/kjdev/nginx-auth-jwt) and is heavily inspired by the nginx original
 > [http_auth_jwt_module](http://nginx.org/en/docs/http/ngx_http_auth_jwt_module.html).
 
 Dependency
@@ -32,8 +27,8 @@ Installation
 
 ``` sh
 $ : "clone repository"
-$ git clone https://github.com/kjdev/nginx-auth-jwt
-$ cd nginx-auth-jwt
+$ git clone https://github.com/SegFaultZero/nginx-jwt-toolkit
+$ cd nginx-jwt-toolkit
 $ : "get nginx source"
 $ NGINX_VERSION=1.x.x # specify nginx version
 $ wget http://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
@@ -47,12 +42,12 @@ $ make && make install
 ### Docker
 
 ``` sh
-$ docker build -t nginx-auth-jwt .
+$ docker build -t nginx-jwt-toolkit .
 $ : "app.conf: Create nginx configuration"
-$ docker run -p 80:80 -v $PWD/app.conf:/etc/nginx/http.d/default.conf nginx-auth-jwt
+$ docker run -p 80:80 -v $PWD/app.conf:/etc/nginx/http.d/default.conf nginx-jwt-toolkit
 ```
 
-> GitHub package: ghcr.io/kjdev/nginx-auth-jwt/nginx
+> GitHub package: ghcr.io/SegFaultZero/nginx-jwt-toolkit/nginx
 
 Supported Algorithms
 --------------------
