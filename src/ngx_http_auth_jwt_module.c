@@ -1278,6 +1278,7 @@ ngx_http_auth_jwt_create_loc_conf(ngx_conf_t *cf)
   conf->nested.quote = NULL;
 
   conf->enabled = NGX_CONF_UNSET;
+  conf->required = NGX_CONF_UNSET;
 
   return conf;
 }
@@ -1423,6 +1424,7 @@ ngx_http_auth_jwt_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
   ngx_conf_merge_value(conf->validate.sig, prev->validate.sig, 1);
 
   ngx_conf_merge_value(conf->enabled, prev->enabled, 0);
+  ngx_conf_merge_value(conf->required, prev->required, 1);
   ngx_conf_merge_str_value(conf->realm, prev->realm, "");
 
   if (prev->revocation.subs) {
